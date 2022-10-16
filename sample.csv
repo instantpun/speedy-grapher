@@ -1,0 +1,4 @@
+source,destination,label
+func1,func2,GET
+func1,func3,POST
+func1,func3,PUT
