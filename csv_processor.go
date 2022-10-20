@@ -3,13 +3,13 @@ package speedygrapher
 import (
 	"encoding/csv"
 	"fmt"
-	"log"
 	"sync"
 	"io"
+	"os"
 	"github.com/awalterschulze/gographviz"
 )
 
-func CsvToGraph(infile, outfilePrefix string, recordProducer func(*io.Reader,*FieldnameMap) (Record, error)) (*gographviz.Interface, error) {
+func CsvToGraph(infile string, recordProducer func(*csv.Reader,*FieldnameMap) (Record, error)) (gographviz.Interface, error) {
 
 	fh, err := os.Open(infile)
 	if err != nil {
@@ -18,32 +18,33 @@ func CsvToGraph(infile, outfilePrefix string, recordProducer func(*io.Reader,*Fi
 	defer fh.Close()
 
 	reader := csv.NewReader(fh)
-	fnames, err := ExtractFieldnames(reader)
+	fnames, err := CsvExtractFieldnames(reader)
 	if err != nil {
 		return nil, err
 	}
 
 	wg := sync.WaitGroup{}
-	graphOrch := NewGraphOrchestrator()
+	graphOrch, err := NewGraphOrchestrator()
+	if err != nil {
+		return nil, err
+	}
 
 	i := 0
 	for {
 		record, err := recordProducer(reader, fnames)
 		if err == io.EOF {
-			log.Println("Reached end of source file")
+			fmt.Printf("Reached end of source file. Total Records: %d\n", i)
 			break
 		} else if err != nil {
 			return nil, err
 		} else {
-			log.Debug("Record %d: %v\n", i, record)
-
 			// Deadlock prevention:
 			// goroutines will remain alive, but asleep indefinitely until
 			// something reads from the unbuffered error channel 
 			go func() {
 				for asyncErr := range graphOrch.Errors {
 						if asyncErr != nil {
-							return nil, err // return first error from go routine
+							panic(err)
 						}
 					}
 			}()
@@ -54,14 +55,13 @@ func CsvToGraph(infile, outfilePrefix string, recordProducer func(*io.Reader,*Fi
 
 	}
 
-	return graphOrch.Graph
+	return graphOrch.Graph, nil
 }
 
-func CreateDOTFile(g *gographviz.Interface) error {
-	log.Println("Writing to file...")
-	log.Debug(g.String())
+func CreateDOTFile(filePrefix string, g gographviz.Interface) error {
+	fmt.Println("Writing to file...")
 	
-	outputGraphFile, err := os.Create(fmt.Sprintf("%s.dot", outfilePrefix))
+	outputGraphFile, err := os.Create(fmt.Sprintf("%s.dot", filePrefix))
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func CreateDOTFile(g *gographviz.Interface) error {
 }
 
 
-func CsvExtractFieldnames(fh *io.Reader) (*FieldnameMap, error) {
+func CsvExtractFieldnames(fh *csv.Reader) (*FieldnameMap, error) {
 
 	fnames := NewFieldnameMap()
 	
