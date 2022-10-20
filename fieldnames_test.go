@@ -1,4 +1,4 @@
-package main
+package speedygrapher
 
 import (
 	"testing"
@@ -13,7 +13,7 @@ func TestFieldnameMap(t *testing.T) {
 	}
 
 	fmap := NewFieldnameMap()
-	result, err := fmap.Update(input)
+	result, err := fmap.UpdateFromSlice(input)
 	if err != nil {
 		t.Errorf("Received error from FieldnameMap.Update(): %v\n", err)
 	}
